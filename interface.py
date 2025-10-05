@@ -1,13 +1,13 @@
 import gradio as gr
 from meeting_minutes_generator import MeetingMinutesGenerator
 
+
 def launch_interface():
     """
     Initialize the MeetingMinutesGenerator and launch the Gradio interface with an advanced GUI.
     """
     generator = MeetingMinutesGenerator()
 
-    # Custom CSS for a more advanced and polished look
     css = """
     body {
         background: #f7f7f7;
@@ -28,16 +28,27 @@ def launch_interface():
     """
 
     with gr.Blocks(css=css) as demo:
-        gr.Markdown("# Meeting Minutes Generator")
-        gr.Markdown("Upload an MP3 recording of your meeting or record the meeting to generate AI-driven, professional meeting minutes and a downloadable PDF.")
+        gr.Markdown("# 🎯 Meeting Minutes Generator (Gemini-powered)")
+        gr.Markdown(
+            "Upload an MP3 recording of your meeting to automatically generate AI-driven, professional meeting minutes and a downloadable PDF."
+        )
+
         with gr.Row():
             audio_input = gr.Audio(type="filepath", label="Upload MP3 File", format="mp3")
+
         with gr.Row():
             markdown_output = gr.Markdown(label="Meeting Minutes")
+
         with gr.Row():
             pdf_output = gr.File(label="Download PDF")
+
         with gr.Row():
-            submit_btn = gr.Button("Submit")
-        submit_btn.click(fn=generator.process_upload, inputs=audio_input, outputs=[markdown_output, pdf_output])
-    # Enable queueing for streaming generator outputs, then launch
+            submit_btn = gr.Button("Generate Minutes")
+
+        submit_btn.click(
+            fn=generator.process_upload,
+            inputs=audio_input,
+            outputs=[markdown_output, pdf_output],
+        )
+
     demo.queue().launch(inbrowser=True)
