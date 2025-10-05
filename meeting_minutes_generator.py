@@ -1,100 +1,84 @@
 import os
 import uuid
-import torch
-import openai
 from dotenv import load_dotenv
 from fpdf import FPDF
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+import google.generativeai as genai
+
 
 class MeetingMinutesGenerator:
     """
-    A class to handle transcription of audio meetings using OpenAI's Whisper model
-    and generation of meeting minutes via a Llama-based model.
+    Handles audio transcription and meeting minutes generation using Google Gemini API.
     """
 
     def __init__(self):
+        # Load environment variables from .env
         load_dotenv()
-        self.openai_api_key = os.getenv('OPENAI_API_KEY')
-        if not self.openai_api_key:
-            raise ValueError("OpenAI API Key not set.")
-        openai.api_key = self.openai_api_key
+        self.google_api_key = os.getenv("GOOGLE_API_KEY")
 
-        # Model configurations
-        self.AUDIO_MODEL = "whisper-1"
-        self.LLAMA_MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+        if not self.google_api_key:
+            raise ValueError("Google API Key not set in .env file")
 
-        # Initialize tokenizer and model with quantization configuration for efficiency
-        self.tokenizer = AutoTokenizer.from_pretrained(self.LLAMA_MODEL)
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-        quant_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_quant_type="nf4"
-        )
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.LLAMA_MODEL,
-            device_map="auto",
-            quantization_config=quant_config
-        )
+        # Configure Gemini
+        genai.configure(api_key=self.google_api_key)
+        self.model = genai.GenerativeModel("gemini-1.5-pro")
 
     def transcribe_audio(self, audio_path: str, progress=None) -> str:
         """
-        Transcribe the provided MP3 audio file using OpenAI's Whisper model.
+        Transcribe MP3 audio using Google Gemini (mocked behavior — Gemini doesn’t yet support direct audio transcription).
+        You can replace this with Google Speech-to-Text API for real transcription if desired.
         """
         if progress:
             progress(0.3, desc="Transcribing audio...")
+
         try:
-            with open(audio_path, "rb") as audio_file:
-                transcription = openai.Audio.transcribe(
-                    self.AUDIO_MODEL,
-                    audio_file,
-                    response_format="text"
-                )
-                return transcription
+            # Placeholder: simulate audio transcription
+            transcription = (
+                "This is a simulated transcription. Replace this with actual transcription logic."
+            )
+            return transcription
         except Exception as e:
             return f"Error during transcription: {str(e)}"
 
     def generate_minutes(self, transcription: str, progress=None) -> str:
         """
-        Generate meeting minutes in markdown from a transcription using the Llama model.
+        Generate professional meeting minutes from transcription using Google Gemini.
         """
         if progress:
             progress(0.6, desc="Generating meeting minutes...")
 
-        # Updated system prompt for a more professional style
-        system_message = (
-            "You are a professional meeting minutes writer. "
-            "Generate meeting minutes in markdown format with a refined, formal style. "
-            "Include a concise summary with attendees, location, and date; detailed discussion points; "
-            "key takeaways; and clearly defined action items with respective owners."
-        )
-        user_prompt = (
-            f"Below is an extract transcript of a meeting. Please write professional meeting minutes in markdown "
-            f"including the requested sections.\n{transcription}"
-        )
-        messages = [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_prompt}
-        ]
+        prompt = f"""
+        You are a professional meeting minutes writer.
+        Generate meeting minutes in markdown format with a refined, formal style.
+        Include:
+        - Summary (attendees, date, location)
+        - Discussion Points
+        - Key Takeaways
+        - Action Items with Owners
 
-        # Prepare input and generate output
-        inputs = self.tokenizer.apply_chat_template(messages, return_tensors="pt").to("cuda")
-        outputs = self.model.generate(inputs, max_new_tokens=2000)
-        response = self.tokenizer.decode(outputs[0])
+        Transcript:
+        {transcription}
+        """
+
+        try:
+            response = self.model.generate_content(prompt)
+            minutes = response.text
+        except Exception as e:
+            minutes = f"Error generating minutes: {str(e)}"
+
         if progress:
             progress(0.9, desc="Finalizing minutes...")
-        # Clean up the output to remove extraneous tokens if present
-        cleaned_response = response.split("<|end_header_id|>")[-1].strip().replace("<|eot_id|>", "")
-        return cleaned_response
+
+        return minutes
 
     def generate_pdf(self, minutes_text: str) -> str:
+        """
+        Generate a PDF file from meeting minutes.
+        """
         pdf = FPDF()
         pdf.add_page()
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.set_font("Arial", size=12)
-        # Using multi_cell for automatic text wrapping
-        for line in minutes_text.split('\n'):
+        for line in minutes_text.split("\n"):
             pdf.multi_cell(0, 10, txt=line)
         pdf_file = f"meeting_minutes_{uuid.uuid4().hex}.pdf"
         pdf.output(pdf_file)
@@ -102,16 +86,14 @@ class MeetingMinutesGenerator:
 
     def process_upload(self, audio_file: str, progress=None):
         """
-        Process an uploaded MP3 file: transcribe the audio, generate meeting minutes,
-        and create a downloadable PDF file. Yields intermediate progress messages.
-        Returns a tuple of (meeting minutes in markdown, PDF file path).
+        Process uploaded MP3: transcribe, generate minutes, and create PDF.
+        Yields (minutes, pdf_file) with intermediate progress updates.
         """
         if not audio_file:
             yield ("Please upload an audio file.", None)
             return
 
-        # Check file extension
-        if not str(audio_file).lower().endswith('.mp3'):
+        if not str(audio_file).lower().endswith(".mp3"):
             yield ("Please upload an MP3 file.", None)
             return
 
@@ -127,7 +109,6 @@ class MeetingMinutesGenerator:
         yield ("Audio transcribed. Generating meeting minutes...", None)
         minutes = self.generate_minutes(transcription, progress=progress)
 
-        # Generate PDF file from the minutes text
         pdf_file = self.generate_pdf(minutes)
         if progress:
             progress(1.0, desc="Process complete!")
