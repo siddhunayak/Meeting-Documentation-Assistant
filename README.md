@@ -21,7 +21,7 @@ All meeting minutes are then provided as a downloadable PDF, making follow-ups a
 
 1. Clone the repository:
     ```bash
-    git clone https://github.com/frezazadeh/Meeting-Minutes-Generator.git
+    git clone https://github.com/siddhynayak/Meeting-Documentation-Assistant.git
     cd Meeting-Minutes-Generator
     ```
 
